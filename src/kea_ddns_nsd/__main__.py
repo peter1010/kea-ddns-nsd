@@ -11,8 +11,14 @@ import os
 import logging
 
 
+if __package__ in ("", None):
+	import update_zonefiles as up_zone
+else:
+	from . import update_zonefiles as up_zone
+
+
 def main():
-	pass
+	up_zone.main()
 
 
 if __name__ == "__main__":
