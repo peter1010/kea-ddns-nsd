@@ -18,7 +18,7 @@ else:
 
 
 def main():
-	up_zone.main()
+    up_zone.main()
 
 
 if __name__ == "__main__":

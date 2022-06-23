@@ -4,13 +4,23 @@ import sys
 import os
 import subprocess
 import fcntl
+import socket
 
 FWD_ZONEFILE = "/var/lib/nsd/home.arpa.forward"
 REV_ZONEFILE = "/var/lib/nsd/home.arpa.reverse"
 nsd_ctl = "/usr/sbin/nsd-control"
-LOCKFILE = "/run/nsd/zone_update.lock"
+LOCKFILE = "/run/kea/zone_update.lock"
 
 ALREADY_DONE = "DONE"
+
+def syslog(msg):
+	prio = 5	# Notice
+	facility = 1 # User
+	msg = "<%d> " % (prio + 8 * facility) + "kea-ddns-nsd " + msg
+	sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+	sock.connect("/dev/log")
+	sock.send(msg.encode('utf-8'))
+	sock.close()
 
 
 def reload():
@@ -30,6 +40,8 @@ def save_zonefile(path, lines):
 		os.unlink(new)
 	with open(new, "wt") as fp:
 		fp.write("\n".join(lines))
+		if lines[-1] != "":
+			fp.write("\n")
 	if os.path.exists(old):
 		os.unlink(old)
 	os.rename(path, old)
@@ -83,7 +95,7 @@ def update_zonefile(path, update_map):
 				_type = "A"
 			else:
 				_type = "PTR"
-			yield "\t\t".join((name, "IN", _type, value))
+			yield "%s\t\t%s\t%s\t%s" %(name, "IN", _type, value)
 	yield Changed
 
 
@@ -100,14 +112,25 @@ def update_reverse_zonefile(reverses):
 
 
 def lease4_renew():
+	hostname = os.getenv("LEASE4_HOSTNAME")
+	ip_address = os.getenv("LEASE4_ADDRESS")
+
+	if ip_address is None:
+		syslog("No IP address specified in lease renewal")
+		return
+
+	parts = ip_address.split(".")
+
+	if hostname is None or hostname == "":
+		hostname = "unamed_" + parts[-1]
+
 	forwards = {}
 	reverses = {}
+	
+	syslog("%s -> %s" % (str(hostname), str(ip_address)))
 
-	hostname = os.getenv("LEASE4_HOSTNAME")
-	ip_address = os.getenv("$LEASE4_ADDRESS")
-    
 	forwards[hostname] = ip_address
-	reverses[ip_address] = hostname
+	reverses[parts[-1]] = hostname
 
 	update_forward_zonefile(forwards)
 	update_reverse_zonefile(reverses)
@@ -120,29 +143,55 @@ def leases4_committed():
 	for x in range(number):
 		hostname = os.getenv("LEASES4_AT%i_HOSTNAME" % x)
 		ip_address = os.getenv("LEASES4_AT%i_ADDRESS" % x)
+
+		if ip_address is None:
+			syslog("No IP address specified in lease renewal")
+			continue
+
+		parts = ip_address.split(".")
+
+		if hostname is None or hostname == "":
+			hostname = "unamed_" + parts[-1]
+
+		syslog("%s -> %s" % (str(hostname), str(ip_address)))
+
 		forwards[hostname] = ip_address
-		reverses[ip_address] = hostname
+		reverses[parts[-1]] = hostname
 	update_forward_zonefile(forwards)
 	update_reverse_zonfile(reverses)
 
 
 def AquireLock():
-	lockfd = open(LOCKFILE, "a+")
+	try:
+		lockfd = open(LOCKFILE, "a+")
+	except PermissionError:
+		syslog("Failed to acquire lock")
+		sys.exit(1)
+
 	fcntl.flock(lockfd.fileno(), fcntl.LOCK_EX)
+	try:
+		os.chmod(LOCKFILE, 0o777)
+	except PermissionError:
+		pass
 
 
 def main():
+	syslog("started")
 	AquireLock()
 	if len(sys.argv) > 1:
 		action = sys.argv[1]
 
 		if action == "lease4_renew":
-			lease_renew()
+			lease4_renew()
 		elif action == "lease4_recover":
-			lease_renew()
+			lease4_renew()
 		elif action == "leases4_committed":
-			leases_committed()
-#	else:
+			leases4_committed()
+		else:
+			syslog("Action %s ignored" % action)
+	else:
+		syslog("No action specified")
+
 #		update_map = { "frodo" : "192.168.11.26" }
 #		update_forward_zonefile(update_map)
 

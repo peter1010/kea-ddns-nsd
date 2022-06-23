@@ -15,4 +15,21 @@ To install
 
 pip install dist/kea_ddns_nsd- ....
 
+#permissions
+
+The script creates a lock file  "/run/kea/zone_update.lock". Hence the script, run as the kea user, needs
+access to this folder,
+
+The scipt modifies the files /var/lib/nsd/home.arpa.reverse and /var/lib/nsd/home.arpa.forward
+
+Hence the script, run as the kea user, needs access to ths folder and permission to update these files.
+
+nsd needs to be able to read the said zone files.
+
+Suggestion is to add the kea user group to nsd user and vice-versa, and allow group access to the zone files.
+
+usermod -G dhcp nsd
+usermod -G nsd dhcp
+
+
 
