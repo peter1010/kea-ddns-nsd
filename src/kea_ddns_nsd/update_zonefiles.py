@@ -78,7 +78,7 @@ def update_record(line, update_map, value_list):
 	return line, Changed
 
 
-def update_zonefile(path, update_map):
+def update_zonefile(path, update_map, _type):
 	value_list = set(update_map.values())
 	Changed = False
 	for line in read_zonefile(path):
@@ -91,22 +91,18 @@ def update_zonefile(path, update_map):
 	for name, value in update_map.items():
 		if value != ALREADY_DONE:
 			Changed = True
-			if len(value.split(".")) == 4:
-				_type = "A"
-			else:
-				_type = "PTR"
 			yield "%s\t\t%s\t%s\t%s" %(name, "IN", _type, value)
 	yield Changed
 
 
 def update_forward_zonefile(forwards):
-	lines = [line for line in update_zonefile(FWD_ZONEFILE, forwards)]
+	lines = [line for line in update_zonefile(FWD_ZONEFILE, forwards, "A")]
 	if lines[-1]:
 		save_zonefile(FWD_ZONEFILE, lines[:-1])
 	
 
 def update_reverse_zonefile(reverses):
-	lines = [line for line in update_zonefile(REV_ZONEFILE, reverses)]
+	lines = [line for line in update_zonefile(REV_ZONEFILE, reverses, "PTR")]
 	if lines[-1]:
 		save_zonefile(REV_ZONEFILE, lines[:-1])
 
@@ -122,7 +118,8 @@ def lease4_renew():
 	parts = ip_address.split(".")
 
 	if hostname is None or hostname == "":
-		hostname = "unamed_" + parts[-1]
+		hostname = os.getenv("LEASE4_HWADDR")
+		hostname = hostname.replace(":","_")
 
 	forwards = {}
 	reverses = {}
@@ -130,7 +127,7 @@ def lease4_renew():
 	syslog("%s -> %s" % (str(hostname), str(ip_address)))
 
 	forwards[hostname] = ip_address
-	reverses[parts[-1]] = hostname
+	reverses[parts[-1]] = hostname + ".home.arpa."
 
 	update_forward_zonefile(forwards)
 	update_reverse_zonefile(reverses)
@@ -151,7 +148,8 @@ def leases4_committed():
 		parts = ip_address.split(".")
 
 		if hostname is None or hostname == "":
-			hostname = "unamed_" + parts[-1]
+			hostname = os.getenv("LEASES4_AT%i_HWADDR" % x)
+			hostname = hostname.replace(":","_")
 
 		syslog("%s -> %s" % (str(hostname), str(ip_address)))
 
@@ -169,6 +167,7 @@ def AquireLock():
 		sys.exit(1)
 
 	fcntl.flock(lockfd.fileno(), fcntl.LOCK_EX)
+	# fcntl.LOCK_NB
 	try:
 		os.chmod(LOCKFILE, 0o777)
 	except PermissionError:
@@ -176,7 +175,6 @@ def AquireLock():
 
 
 def main():
-	syslog("started")
 	AquireLock()
 	if len(sys.argv) > 1:
 		action = sys.argv[1]
