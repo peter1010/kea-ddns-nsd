@@ -13,6 +13,11 @@ LOCKFILE = "/run/kea/zone_update.lock"
 
 ALREADY_DONE = "DONE"
 
+# For those devices that refuse to give away there names
+STATIC_MAPPINGS = {
+	"24_46_c8_8b_bb_f1" : "motoG7"
+}
+
 def syslog(msg):
 	"""Send message to Syslog"""
 	prio = 5	# Notice
@@ -113,8 +118,12 @@ def update_reverse_zonefile(reverses):
 
 
 def clean_hostname(hostname, hw_addr):
+	"""Given a hostname and it's hardware address, return a
+	cleaned up version of the hostname"""
 	if hostname is None or hostname == "":
 		hostname = hw_addr.replace(":","_")
+		if hostname in STATIC_MAPPINGS:
+			hostname = STATIC_MAPPINGS[hostname]
 	else:
 		idx = hostname.find(".")
 		if idx > 0:
