@@ -1,7 +1,7 @@
 # kea-ddns-nsd
 Take Kea IP reservations and update zonefiles for nsd to pick up local network changes
 
-There is a python script to do this called kea-ddns-nsd.
+There is a python module to do this called kea-ddns-nsd.
 
 To build and install follow PEP517...
 
@@ -14,6 +14,8 @@ python -m build
 To install 
 
 pip install dist/kea_ddns_nsd- ....
+
+for some distros, e.g. gentoo; it's best to install locally to avoid conflict with the pacakge manager.
 
 #permissions
 
