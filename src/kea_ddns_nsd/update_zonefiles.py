@@ -14,6 +14,7 @@ LOCKFILE = "/run/kea/zone_update.lock"
 ALREADY_DONE = "DONE"
 
 def syslog(msg):
+	"""Send message to Syslog"""
 	prio = 5	# Notice
 	facility = 1 # User
 	msg = "<%d> " % (prio + 8 * facility) + "kea-ddns-nsd " + msg
@@ -24,16 +25,20 @@ def syslog(msg):
 
 
 def reload():
+	"""Signal to NSD to reload the zonefiles"""
 	subprocess.call([nsd_ctl, "reload"])
 
 
 def read_zonefile(path):
+	"""An iterator, read one line at a time from the zonefile"""
 	with open(path, "rt") as fp:
 		for line in fp:
 			yield line.rstrip()
 
 
 def save_zonefile(path, lines):
+	"""Save zonefile for use by NSD.
+	The current saved zonefile is rename with a .old extension"""
 	old = path + ".old"
 	new = path + ".new"
 	if os.path.exists(new):
@@ -107,6 +112,17 @@ def update_reverse_zonefile(reverses):
 		save_zonefile(REV_ZONEFILE, lines[:-1])
 
 
+def clean_hostname(hostname, hw_addr):
+	if hostname is None or hostname == "":
+		hostname = hw_addr.replace(":","_")
+	else:
+		idx = hostname.find(".")
+		if idx > 0:
+			hostname = hostname[:idx]
+	return hostname
+
+
+
 def lease4_renew():
 	hostname = os.getenv("LEASE4_HOSTNAME")
 	ip_address = os.getenv("LEASE4_ADDRESS")
@@ -117,9 +133,7 @@ def lease4_renew():
 
 	parts = ip_address.split(".")
 
-	if hostname is None or hostname == "":
-		hostname = os.getenv("LEASE4_HWADDR")
-		hostname = hostname.replace(":","_")
+	hostname = clean_hostname(hostname, os.getenv("LEASE4_HWADDR"))
 
 	forwards = {}
 	reverses = {}
@@ -147,9 +161,7 @@ def leases4_committed():
 
 		parts = ip_address.split(".")
 
-		if hostname is None or hostname == "":
-			hostname = os.getenv("LEASES4_AT%i_HWADDR" % x)
-			hostname = hostname.replace(":","_")
+		hostname = clean_hostname(hostname, os.getenv("LEASES4_AT%i_HWADDR" % x))
 
 		syslog("%s -> %s" % (str(hostname), str(ip_address)))
 
